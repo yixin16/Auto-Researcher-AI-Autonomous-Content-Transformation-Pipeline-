@@ -1,19 +1,32 @@
-# AI Video Analyst & Slide Generator
+# Auto Researcher AI: Autonomous Video Stragegy & Presentation Generator
 
-This project is an advanced multi-agent AI system that automates the process of transforming unstructured video content from YouTube into structured, professional PowerPoint presentations. By leveraging a series of specialized Large Language Model (LLM) agents, the system can download, transcribe, summarize, analyze, and visualize video content with minimal human intervention.
+
+![alt text](https://img.shields.io/badge/Python-3.10%2B-blue)
+![alt text](https://img.shields.io/badge/Frontend-Streamlit-red)
+![alt text](https://img.shields.io/badge/AI-Llama3%20%7C%20Whisper%20%7C%20SDXL-purple)
+![alt text](https://img.shields.io/badge/License-MIT-green)
+
+
+AutoResearcher AI Pro is an advanced agentic system that transforms unstructured YouTube video content into professional, strategic PowerPoint presentations.
+It utilizes Local LLMs (Llama-3/Phi-2) for reasoning, OpenAI Whisper for transcription, RAG (ChromaDB) for context retrieval, and Stable Diffusion (SDXL Turbo) for generative art—all orchestrated through a user-friendly Streamlit interface.
 
 ## Key Features
+🕵️ Deep Content Analysis
+- **Audio-First Extraction:** Uses yt-dlp and Whisper to transcribe video audio with high accuracy.
+- **Multi-Agent Swarm:** Specialized agents for Summarization, Key Points extraction, Strategic Insights, and SWOT Analysis.
+- **Data Extraction:** The ChartAgent detects numerical data in the transcript and automatically plots professional bar charts using Matplotlib.
 
-- **Multi-Agent Architecture:** Utilizes an Orchestrator pattern to manage a suite of specialized agents (Summarizer, Key-Point Extractor, Q&A Generator, Title Agent, Visual Agent, etc.) for modular and scalable task execution.
-- **End-to-End Automation:** A fully automated pipeline from a YouTube URL to a downloadable `.pptx` file.
-- **GPU-Accelerated Performance:** Optimized for NVIDIA GPUs with CUDA, using 4-bit model quantization (`bitsandbytes`) to significantly reduce VRAM usage and improve inference speed.
-- **Advanced Content Generation:** Goes beyond summarization to extract non-obvious insights, generate relevant Q&A pairs, and create catchy presentation titles.
-- **Dynamic Visuals:** An integrated `VisualAgent` searches for and embeds relevant stock photos based on the presentation's title, enhancing visual appeal.
-- **Professional Slide Design:**
-    - Uses custom PowerPoint templates (`template.pptx`) for consistent branding and design.
-    - Automatically fits text to slide placeholders to prevent overflow.
-- **Robust Caching System:** A smart caching layer saves the results of each step (transcription, summarization, etc.), making subsequent runs on the same URL nearly instantaneous.
-- **Interactive Web UI:** Includes a user-friendly web interface built with Streamlit for easy access and use.
+📝 Human-in-the-Loop Workflow
+- **Interactive Editor:** Review the AI's generated outline, edit summaries, and refine bullet points before the slides are built
+- **Dynamic Slide Engine:** Automatically adapts the presentation layout (3 to 6 slides per section) based on the density of the content.
+
+🎨 Generative Visuals
+- **AI Image Generation:** Integrated SDXL Turbo to generate unique, cinematic slide backgrounds based on the context.
+- **Stock Photo Fallback:** Optional integration with Pexels API for real-world stock imagery.
+
+💬 RAG Chat ("Chat with Video")
+- **Vector Memory:** Indexes the video transcript into ChromaDB.
+- **Interactive Q&A:** Ask specific questions about the video (e.g., "What did the speaker say about Q3 earnings?") and get cited answers.
 
 ## System Architecture
 
@@ -33,12 +46,12 @@ The system follows a sequential pipeline managed by the `ContentOrchestrator`:
 
 ## Tech Stack
 
--   **Core:** Python 3.10+
--   **AI/ML:** PyTorch, Hugging Face Transformers, `bitsandbytes`, `openai-whisper`
--   **Data Processing:** `yt-dlp`, `ffmpeg`, `PyYAML`, `requests`
--   **Presentation:** `python-pptx`
--   **Web UI:** Streamlit
--   **Environment:** Conda, NVIDIA CUDA
+-   **Orchestration:** `Python`, `Custom Agent Classes`
+-   **UI:** `Streamlit`
+-   **LLM:** `Microsoft Phi-2 (CPU/Low VRAM)` , `Unsloth Llama-3 (GPU)`
+-   **Vision/Art:** `Diffusers (SDXL Turbo)`
+-   **Memory:** `ChromaDB`, `Sentence-Transformers`
+-   **Output:** `python-pptx`, `Matplotlib`
 
 ## Setup and Installation
 
@@ -48,8 +61,8 @@ The system follows a sequential pipeline managed by the `ContentOrchestrator`:
 
 1.  **Clone the Repository:**
     ```bash
-    git clone https://github.com/your-username/Auto_Researcher_AI.git
-    cd Auto_Researcher_AI
+    git clone https://github.com/yixin16/Auto-Researcher-AI-Autonomous-Content-Transformation-Pipeline-.git
+    cd Auto-Researcher-AI-Autonomous-Content-Transformation-Pipeline-
     ```
 
 2.  **Create Conda Environment:**
