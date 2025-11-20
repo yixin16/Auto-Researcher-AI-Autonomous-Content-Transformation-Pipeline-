@@ -1,0 +1,5 @@
+llm_model: "unsloth/llama-3-8b-Instruct-bnb-4bit"
+transcription_model_size: "base" # Options: tiny, base, small, medium, large
+qna_questions_to_generate: 3
+key_points_to_extract: 8
+max_chunk_size: 2500
