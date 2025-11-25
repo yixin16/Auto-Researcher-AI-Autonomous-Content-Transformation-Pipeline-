@@ -6,9 +6,8 @@
 ![alt text](https://img.shields.io/badge/AI-Llama3%20%7C%20Whisper%20%7C%20SDXL-purple)
 ![alt text](https://img.shields.io/badge/License-MIT-green)
 
-
-AutoResearcher AI Pro is an advanced agentic system that transforms unstructured YouTube video content into professional, strategic PowerPoint presentations.
-It utilizes Local LLMs (Llama-3/Phi-2) for reasoning, OpenAI Whisper for transcription, RAG (ChromaDB) for context retrieval, and Stable Diffusion (SDXL Turbo) for generative art—all orchestrated through a user-friendly Streamlit interface.
+## Overview
+AutoResearcher AI Pro is an advanced agentic system that transforms long-form YouTube videos into professional presentation decks. It integrates local LLMs, Whisper transcription, RAG-based reasoning, generative visuals, and automated slide creation.
 
 ## Key Features
 🕵️ Deep Content Analysis
@@ -28,22 +27,52 @@ It utilizes Local LLMs (Llama-3/Phi-2) for reasoning, OpenAI Whisper for transcr
 - **Vector Memory:** Indexes the video transcript into ChromaDB.
 - **Interactive Q&A:** Ask specific questions about the video (e.g., "What did the speaker say about Q3 earnings?") and get cited answers.
 
-## System Architecture
+## System Workflow
 
 The system follows a sequential pipeline managed by the `ContentOrchestrator`:
 
-1.  **Audio Downloader (`yt-dlp`, `ffmpeg`):** Downloads the audio track from a YouTube URL and converts it to a usable format.
-2.  **Transcriber (`openai-whisper`):** Converts the audio file into a full text transcript.
-3.  **Orchestrator:** Manages the workflow and shares a single, memory-efficient LLM instance across all agents.
-4.  **LLM Agents (`transformers`, `PyTorch`):** A series of agents process the text in parallel or sequence:
-    -   `SummarizerAgent`: Creates a concise summary of the transcript.
-    -   `TitleAgent`: Generates a catchy title from the summary.
-    -   `KeyPointAgent`: Extracts the most important bullet points.
-    -   `QnAAgent`: Creates relevant question-and-answer pairs.
-    -   `InsightAgent`: Analyzes the summary to find deeper, non-obvious insights.
-5.  **Visual Agent (`Pexels API`):** Searches for a relevant image based on the generated title.
-6.  **Presentation Generator (`python-pptx`):** Assembles all the generated content into a polished PowerPoint presentation using a predefined template.
+### 1. **Ingestion & Preprocessing**
+- User provides a YouTube URL or uploads a video file.
+- `yt-dlp` downloads audio; `ffmpeg` converts it into WAV.
+- The workflow is managed by `ContentOrchestrator`.
 
+### 2. **Audio-to-Text Transcription**
+- Whisper converts audio into text transcripts with timestamps.
+- Optional: segment the transcript for improved downstream accuracy.
+
+### 3. **Chunking & Embedding (RAG Layer)**
+- Transcript is split into 400–600 token chunks.
+- Embeddings generated using `sentence-transformers`.
+- Chunks stored in ChromaDB with metadata.
+- Enables “Chat with Video” with context retrieval.
+
+### 4. **Multi-Agent Content Processing**
+The orchestrator triggers the following agents:
+
+- **SummarizerAgent** — creates high-level overview.
+- **TitleAgent** — generates compelling presentation titles.
+- **KeyPointAgent** — extracts key insights.
+- **InsightAgent** — finds deeper strategic implications.
+- **QnAAgent** — creates FAQ-style Q&A.
+- **ChartAgent** — detects numerical patterns and generates charts.
+- **SlidePlannerAgent** — outputs a JSON slide structure.
+
+### 5. **Visual Generation**
+- SDXL Turbo creates slide backgrounds using text prompts.
+- Optional fallback: Pexels stock images via API.
+
+### 6. **Presentation Assembly**
+- `python-pptx` applies the planned JSON structure.
+- Integrates titles, bullet points, insights, Q&A, and visuals.
+- Produces a polished .pptx file.
+
+### 7. **Interactive Web App**
+- Streamlit UI allows:
+  - Upload video
+  - Generate transcript
+  - Human-in-the-loop editing
+  - Auto-build final PowerPoint
+  - RAG chat with video
 ## Tech Stack
 
 -   **Orchestration:** `Python`, `Custom Agent Classes`
