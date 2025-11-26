@@ -1,32 +1,16 @@
-# --- Core AI & LLM Generation ---
-# Required for PyTorch backend
-torch>=2.0.0
-# Hugging Face Transformers for loading the Phi-2 model
-transformers>=4.37.0
-# Required for device_map="auto" and efficient model loading
-accelerate>=0.26.0
-# Required for 4-bit quantization (BaseAgent configuration)
-bitsandbytes>=0.41.0
-# Often required by transformers for mathematical operations
-scipy
-
-# --- Audio Processing & Transcription ---
-# OpenAI's Whisper model for speech-to-text
-openai-whisper
-# For downloading audio from YouTube
-yt-dlp
-# Note: You also need FFmpeg installed on your system (not a python package)
-
-# --- Presentation Generation ---
-# For creating .pptx files
-python-pptx
-# For downloading images to insert into slides
-requests
-
-# --- External APIs ---
-# Wrapper for Pexels Stock Photo API
-pexels-api
-
-# --- Utilities ---
-# Optional but recommended for managing API keys in .env files
-python-dotenv
+pip install torch torchvision torchaudio --index-url https://download.pytorch.org/whl/cu118
+pip install transformers>=4.36.0
+pip install bitsandbytes>=0.41.0
+pip install accelerate>=0.25.0
+pip install streamlit>=1.29.0
+pip install python-pptx>=0.6.23
+pip install openai-whisper>=20231117
+pip install sentence-transformers>=2.2.2
+pip install chromadb>=0.4.18
+pip install matplotlib>=3.8.0
+pip install plotly>=5.18.0
+pip install requests>=2.31.0
+pip install python-dotenv>=1.0.0
+pip install yt-dlp
+pip install pexels-api
+pip install Pillow>=10.1.0
