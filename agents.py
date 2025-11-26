@@ -136,6 +136,7 @@ class CriticAgent(BaseAgent):
     def __init__(self, model=None, tokenizer=None, model_name="microsoft/phi-2"):
         super().__init__(model, tokenizer, model_name)
         self.review_history = []
+        logger.info(f"[{self.agent_name}] Initialized quality control system")
     
     def review_summary(self, summary: str, original_text: str) -> AgentOutput:
         """Reviews summary quality against source material"""

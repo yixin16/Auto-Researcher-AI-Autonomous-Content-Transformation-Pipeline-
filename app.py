@@ -1,4 +1,3 @@
-# app_v2.py - Enhanced Streamlit Interface
 import streamlit as st
 import os
 import time

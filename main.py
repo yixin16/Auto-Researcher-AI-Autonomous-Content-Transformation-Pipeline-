@@ -1,8 +1,8 @@
+# main.py - Enhanced Orchestration Layer (FIXED)
 import asyncio
 import logging
 from typing import List, Dict, Tuple, Optional
 import time
-from concurrent.futures import ThreadPoolExecutor
 from dataclasses import dataclass
 
 from agents import (
@@ -14,8 +14,6 @@ from utils import download_audio, transcribe_audio_whisper, chunk_text
 from rag_engine import RAGEngine
 from ppt_generator import PPTGenerator
 from image_generator import ImageGenerator
-from cache_manager import get_or_create
-import hashlib
 
 logging.basicConfig(
     level=logging.INFO,
@@ -140,14 +138,10 @@ class ContentOrchestrator:
         # === PHASE 2: Critical Review ===
         logger.info(f"[Chunk {chunk_id}] Performing quality review...")
         
-        review_tasks = [
-            self.critic.review_summary(chunk_data['summary'], chunk),
-            self.critic.review_key_points(chunk_data['points'], chunk),
-            self.critic.review_insights(chunk_data['insights'], chunk)
-        ]
-        
-        reviews = await asyncio.gather(*review_tasks)
-        summary_review, points_review, insights_review = reviews
+        # FIXED: Call critic methods directly (they're synchronous, not async)
+        summary_review = self.critic.review_summary(chunk_data['summary'], chunk)
+        points_review = self.critic.review_key_points(chunk_data['points'], chunk)
+        insights_review = self.critic.review_insights(chunk_data['insights'], chunk)
         
         # === PHASE 3: Self-Correction (if needed) ===
         needs_correction = False
@@ -158,10 +152,8 @@ class ContentOrchestrator:
             needs_correction = True
             
             # Regenerate with feedback
-            feedback_prompt = f"Previous attempt had issues: {', '.join(summary_review.revision_notes)}"
-            revised = await self.summarizer.summarize_async(
-                f"{feedback_prompt}\n\nOriginal text: {chunk}"
-            )
+            feedback_prompt = f"Previous attempt had issues: {', '.join(summary_review.revision_notes)}\n\nOriginal text: {chunk}"
+            revised = await self.summarizer.summarize_async(feedback_prompt)
             chunk_data['summary'] = revised.content
             self.metrics.retry_counts['summarizer'] = \
                 self.metrics.retry_counts.get('summarizer', 0) + 1
@@ -287,7 +279,8 @@ class ContentOrchestrator:
         
         # === TITLE GENERATION ===
         logger.info("📝 Generating title...")
-        full_summary = " ".join(s['summary'] for s in outline[:3])
+        # Use .get() to avoid errors if 'summary' is missing
+        full_summary = " ".join(s.get('summary', '') for s in outline[:3])
         title = self.title_gen.generate_title(full_summary)
         logger.info(f"✅ Title: {title}")
         
@@ -296,64 +289,74 @@ class ContentOrchestrator:
         
         # === PROCESS EACH SECTION ===
         for section in outline:
-            logger.info(f"[Section {section['id']+1}] Building slides...")
+            # EXTRACT DATA SAFELY using .get()
+            sec_id = section.get('id', 0)
+            summary = section.get('summary', '')
+            points = section.get('points', [])
+            insights = section.get('insights', [])
+            image_prompt = section.get('image_prompt', '')
+            chart_data = section.get('chart_data') # <--- FIXED: Returns None if key missing
+            qna_data = section.get('qna', [])
+
+            logger.info(f"[Section {sec_id+1}] Building slides...")
             
             # Slide 1: Visual Overview
             if use_ai_images and img_gen:
                 logger.info("  🎨 Generating AI artwork...")
-                img_url = img_gen.generate(section['image_prompt'], f"sec{section['id']}")
+                img_url = img_gen.generate(image_prompt, f"sec{sec_id}")
             else:
                 logger.info("  📷 Fetching stock photo...")
-                img_url = self.visual.get_image_for_topic(section['image_prompt'])
+                img_url = self.visual.get_image_for_topic(image_prompt)
             
             ppt.add_visual_slide(
-                f"Section {section['id']+1}: Overview",
-                section['summary'],
+                f"Section {sec_id+1}: Overview",
+                summary,
                 img_url
             )
             
             # Slide 2: Combined Analysis (if content is moderate)
-            if len(section['points']) <= 4 and len(section['insights']) <= 3:
+            if len(points) <= 4 and len(insights) <= 3:
                 ppt.add_analysis_slide(
                     f"Analysis",
-                    section['points'],
-                    section['insights']
+                    points,
+                    insights
                 )
             else:
                 # Slide 2a: Key Points
                 ppt.add_bullet_slide(
                     f"Key Findings",
-                    section['points'],
+                    points,
                     icon="▸"
                 )
                 # Slide 2b: Deep Insights
-                if section['insights']:
+                if insights:
                     ppt.add_bullet_slide(
                         f"Strategic Insights",
-                        section['insights'],
+                        insights,
                         icon="💡"
                     )
             
             # Slide 3: Chart (if data available)
-            if section['chart_data']:
+            # This will now safely skip if chart_data is None or key is missing
+            if chart_data:
                 logger.info("  📊 Creating data visualization...")
                 chart_path = ppt.create_chart_image(
-                    section['chart_data'],
-                    f"sec{section['id']}"
+                    chart_data,
+                    f"sec{sec_id}"
                 )
                 if chart_path:
                     ppt.add_chart_slide(
-                        section['chart_data']['title'],
+                        chart_data.get('title', 'Data Analysis'),
                         chart_path
                     )
             
             # Slide 4: Q&A (if available)
-            if section['qna']:
-                ppt.add_qna_slide(section['qna'])
+            if qna_data:
+                ppt.add_qna_slide(qna_data)
         
         # === FINAL SWOT SLIDE ===
         logger.info("📈 Performing executive SWOT analysis...")
-        full_text = " ".join(s['original_text'] for s in outline)
+        full_text = " ".join(s.get('original_text', '') for s in outline)
         swot_result = await self.swot.analyze_async(full_text[:5000])
         swot_data = swot_result.content
         
@@ -398,3 +401,4 @@ class ContentOrchestrator:
                     if (self.metrics.cache_hits + self.metrics.cache_misses) > 0 else 0
             }
         }
+        
