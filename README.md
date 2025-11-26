@@ -1,4 +1,4 @@
-# 🧠 AutoResearcher AI - Self-Correcting Multi-Agent Video Analysis System
+#  Auto Researcher AI - Self-Correcting Multi-Agent Video Analysis System
 
 <div align="center">
 
@@ -8,21 +8,17 @@
 
 **Transform YouTube videos into professional presentations with AI agents that review and improve each other's work**
 
-[Features](#-key-features) • [Installation](#-installation) • [Usage](#-usage) • [Architecture](#-architecture) • [Customization](#-customization)
-
 </div>
 
 ---
 
-## What Makes This Different?
+**AutoResearcher AI Pro** implements a **self-correcting multi-agent system** where:
 
-Unlike traditional AI tools that generate content once and move on, **AutoResearcher AI Pro** implements a **self-correcting multi-agent system** where:
-
-- 🔍 **Critic Agent** reviews outputs from all other agents
-- 🔄 **Automatic Retry Logic** regenerates low-quality content with improvement feedback
-- ⚡ **Parallel Processing** analyzes multiple sections simultaneously (3-5x faster)
-- 📊 **Quality Metrics** track every output's score and retry count
-- 🎨 **Dynamic Slide Design** adapts layouts based on content density
+-  **Critic Agent** reviews outputs from all other agents
+-  **Automatic Retry Logic** regenerates low-quality content with improvement feedback
+-  **Parallel Processing** analyzes multiple sections simultaneously (3-5x faster)
+-  **Quality Metrics** track every output's score and retry count
+-  **Dynamic Slide Design** adapts layouts based on content density
 
 **Result**: Higher quality presentations with less human editing needed.
 
@@ -309,31 +305,6 @@ Open browser to: `http://localhost:8501`
 - ✓ Forward-looking perspective
 - ✓ Strategic implications
 - ✓ Pattern recognition
-
----
-
-## 📈 Performance Benchmarks
-
-### Processing Times
-
-| Video Length | Transcription | Analysis | Generation | Total | Slides |
-|--------------|---------------|----------|------------|-------|--------|
-| **5 min** | 15s | 25s | 5s | **45s** | 8-12 |
-| **15 min** | 35s | 80s | 15s | **2m 10s** | 18-25 |
-| **30 min** | 70s | 210s | 30s | **5m 10s** | 35-45 |
-| **60 min** | 140s | 380s | 60s | **9m 40s** | 65-80 |
-
-**Hardware**: RTX 3090 (24GB), AMD Ryzen 9 5950X, 64GB RAM
-
-### Quality Metrics
-
-| Metric | Before v2.0 | After v2.0 | Improvement |
-|--------|-------------|------------|-------------|
-| **Avg Quality Score** | 3.2/5 | 4.3/5 | +34% |
-| **Low Quality Outputs** | 35% | 8% | -77% |
-| **Human Edits Needed** | 60% | 20% | -67% |
-| **Processing Speed** | Baseline | 3.2x faster | +220% |
-| **User Satisfaction** | 6.5/10 | 8.7/10 | +34% |
 
 ---
 
