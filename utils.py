@@ -4,6 +4,8 @@ from pathlib import Path
 import whisper
 import subprocess
 import logging
+import json
+import re
 
 logger = logging.getLogger(__name__)
 
@@ -69,3 +71,28 @@ def chunk_text(text: str, max_len=2500) -> list:
         start = cut + 1
         
     return chunks
+
+
+def robust_json_parse(text: str) -> dict:
+    """
+    Attempts to parse JSON from messy LLM output. 
+    Fixes common errors like missing quotes or trailing commas.
+    """
+    # Find the JSON object within text
+    match = re.search(r'\{.*\}', text, re.DOTALL)
+    if not match:
+        return {}
+    
+    json_str = match.group()
+    
+    try:
+        return json.loads(json_str)
+    except json.JSONDecodeError:
+        try:
+            # Common fix: Replace single quotes with double quotes
+            json_str = json_str.replace("'", '"')
+            # Common fix: Remove trailing commas
+            json_str = re.sub(r',\s*}', '}', json_str)
+            return json.loads(json_str)
+        except:
+            return {}

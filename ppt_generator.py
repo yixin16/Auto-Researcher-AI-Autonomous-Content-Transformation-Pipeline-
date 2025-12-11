@@ -1,3 +1,4 @@
+# ppt_generator.py
 from pptx import Presentation
 from pptx.util import Pt, Inches, Emu
 from pptx.dml.color import RGBColor

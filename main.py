@@ -1,26 +1,67 @@
-# main.py - Enhanced Orchestration Layer (FIXED)
+# main.py
+
 import asyncio
 import logging
-from typing import List, Dict, Tuple, Optional
 import time
+import os
+from typing import List, Dict, Tuple, Optional
 from dataclasses import dataclass
 
-from agents import (
-    SummarizerAgent, KeyPointAgent, InsightAgent, QnAAgent,
-    ChartAgent, SWOTAgent, VisualKeywordAgent, TitleAgent,
-    VisualAgent, CriticAgent, AgentOutput, QualityScore
-)
-from utils import download_audio, transcribe_audio_whisper, chunk_text
-from rag_engine import RAGEngine
-from ppt_generator import PPTGenerator
-from image_generator import ImageGenerator
+# --- 1. Robust Import Handling ---
+
+# Agents: Try importing from agents.py or agents_enhanced.py
+try:
+    from agents import (
+        SummarizerAgent, KeyPointAgent, InsightAgent, QnAAgent,
+        ChartAgent, SWOTAgent, VisualKeywordAgent, TitleAgent,
+        VisualAgent, CriticAgent, ContextClassifier, FactCheckerAgent,
+        QualityScore, AgentOutput
+    )
+except ImportError:
+    try:
+        from agents import (
+            SummarizerAgent, KeyPointAgent, InsightAgent, QnAAgent,
+            ChartAgent, SWOTAgent, VisualKeywordAgent, TitleAgent,
+            VisualAgent, CriticAgent, ContextClassifier, FactCheckerAgent,
+            QualityScore, AgentOutput
+        )
+    except ImportError:
+        raise ImportError("❌ Critical Error: Could not find 'agents.py' or 'agents_enhanced.py'.")
+
+# RAG Engine: Handle class name mismatch
+try:
+    from rag_engine import EnhancedRAGEngine as RAGEngine
+except ImportError:
+    try:
+        from rag_engine import RAGEngine
+    except ImportError:
+        raise ImportError("❌ Critical Error: Could not import RAGEngine from 'rag_engine.py'.")
+
+# Utilities
+try:
+    from utils import download_audio, transcribe_audio_whisper, chunk_text
+except ImportError:
+    raise ImportError("❌ Critical Error: 'utils.py' is missing. Please ensure audio processing utilities exist.")
+
+# Generators (Optional/Placeholder handling)
+try:
+    from ppt_generator import PPTGenerator
+except ImportError:
+    print("⚠️ Warning: 'ppt_generator.py' not found. Presentation generation will fail.")
+    PPTGenerator = None
+
+try:
+    from image_generator import ImageGenerator
+except ImportError:
+    ImageGenerator = None  # AI Art is optional
+
+# --- 2. Orchestrator Logic ---
 
 logging.basicConfig(
     level=logging.INFO,
     format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
 )
 logger = logging.getLogger(__name__)
-
 
 @dataclass
 class ProcessingMetrics:
@@ -32,38 +73,47 @@ class ProcessingMetrics:
     cache_hits: int
     cache_misses: int
 
-
 class ContentOrchestrator:
-    """Enhanced orchestrator with parallel processing and quality control"""
+    """
+    Enhanced Orchestrator 2.0
+    Features: Rolling Context Memory, Fact-Checking, Dynamic Context Detection
+    """
     
     def __init__(self, config: Dict):
-        logger.info("🚀 Initializing Enhanced Content Orchestrator...")
+        logger.info("🚀 Initializing Intelligent Content Orchestrator...")
         
         self.config = config
-        model_name = config.get('llm_model', 'microsoft/phi-2')
+        # Use a smarter model for logic/reasoning
+        model_name = config.get('llm_model', 'unsloth/llama-3-8b-Instruct-bnb-4bit') 
         
         # Initialize base model (shared across agents)
-        from transformers import AutoTokenizer, AutoModelForCausalLM, BitsAndBytesConfig
-        import torch
+        try:
+            from transformers import AutoTokenizer, AutoModelForCausalLM, BitsAndBytesConfig
+            import torch
+            
+            logger.info(f"Loading Intelligence Engine: {model_name}")
+            bnb_config = BitsAndBytesConfig(
+                load_in_4bit=True,
+                bnb_4bit_quant_type="nf4",
+                bnb_4bit_compute_dtype=torch.float16,
+                bnb_4bit_use_double_quant=True,
+            )
+            
+            self.tokenizer = AutoTokenizer.from_pretrained(model_name, use_fast=True)
+            self.model = AutoModelForCausalLM.from_pretrained(
+                model_name,
+                quantization_config=bnb_config,
+                device_map="auto",
+                trust_remote_code=True
+            )
+        except Exception as e:
+            logger.error(f"Failed to load LLM: {e}")
+            raise e
         
-        logger.info(f"Loading shared model: {model_name}")
-        bnb_config = BitsAndBytesConfig(
-            load_in_4bit=True,
-            bnb_4bit_quant_type="nf4",
-            bnb_4bit_compute_dtype=torch.float16,
-            bnb_4bit_use_double_quant=True,
-        )
-        
-        self.tokenizer = AutoTokenizer.from_pretrained(model_name, use_fast=True)
-        self.model = AutoModelForCausalLM.from_pretrained(
-            model_name,
-            quantization_config=bnb_config,
-            device_map="auto",
-            trust_remote_code=True
-        )
-        
-        # Initialize agents with shared model
-        logger.info("Initializing intelligent agents...")
+        # Initialize Intelligent Swarm
+        logger.info("Initializing Agents...")
+        self.classifier = ContextClassifier(self.model, self.tokenizer)     # Context Detection
+        self.fact_checker = FactCheckerAgent(self.model, self.tokenizer)    # Hallucination Guard
         self.summarizer = SummarizerAgent(self.model, self.tokenizer)
         self.key_point = KeyPointAgent(self.model, self.tokenizer)
         self.insight = InsightAgent(self.model, self.tokenizer)
@@ -73,181 +123,171 @@ class ContentOrchestrator:
         self.visual_kw = VisualKeywordAgent(self.model, self.tokenizer)
         self.title_gen = TitleAgent(self.model, self.tokenizer)
         self.visual = VisualAgent()
-        
-        # Initialize critic agent (quality control)
         self.critic = CriticAgent(self.model, self.tokenizer)
         
         # Metrics tracking
         self.metrics = ProcessingMetrics(
-            total_time=0,
-            agent_times={},
-            retry_counts={},
-            quality_scores={},
-            cache_hits=0,
-            cache_misses=0
+            total_time=0, agent_times={}, retry_counts={}, 
+            quality_scores={}, cache_hits=0, cache_misses=0
         )
         
-        logger.info("✅ All systems operational")
-    
-    async def process_chunk_with_review(
-        self, 
-        chunk_id: int, 
-        chunk: str, 
-        url: str
-    ) -> Dict:
+        logger.info("✅ System Operational: Memory & Fact-Checking Active")
+
+    async def _process_parallel_tasks(self, chunk: str, summary: str) -> Dict:
         """
-        Process a single chunk with critic review and self-correction loop
+        Helper: Runs deep analysis tasks in parallel AFTER summary is generated.
+        This balances narrative flow (serial) with performance (parallel).
         """
-        logger.info(f"[Chunk {chunk_id}] Starting intelligent analysis...")
-        
-        chunk_data = {
-            'id': chunk_id,
-            'original_text': chunk,
-            'summary': '',
-            'points': [],
-            'insights': [],
-            'qna': [],
-            'chart_data': None,
-            'image_prompt': '',
-            'quality_report': {}
-        }
-        
-        # === PHASE 1: Initial Generation (Parallel) ===
         tasks = [
-            self.summarizer.summarize_async(chunk),
             self.key_point.extract_points_async(chunk),
             self.insight.find_insights_async(chunk),
             self.qna.generate_qna_async(chunk)
         ]
         
         results = await asyncio.gather(*tasks)
-        summary_output, points_output, insights_output, qna_output = results
+        points_out, insights_out, qna_out = results
         
-        # Store initial results
-        chunk_data['summary'] = summary_output.content
-        chunk_data['points'] = points_output.content
-        chunk_data['insights'] = insights_output.content
-        chunk_data['qna'] = qna_output.content
+        # Run Critic on key points
+        points_review = self.critic.review_key_points(points_out.content, chunk) if hasattr(self.critic, 'review_key_points') else None
         
-        # Track metrics
-        for output in results:
-            self.metrics.agent_times[output.agent_name] = \
-                self.metrics.agent_times.get(output.agent_name, 0) + output.processing_time
-            self.metrics.quality_scores[f"{output.agent_name}_{chunk_id}"] = output.quality_score
-        
-        # === PHASE 2: Critical Review ===
-        logger.info(f"[Chunk {chunk_id}] Performing quality review...")
-        
-        # FIXED: Call critic methods directly (they're synchronous, not async)
-        summary_review = self.critic.review_summary(chunk_data['summary'], chunk)
-        points_review = self.critic.review_key_points(chunk_data['points'], chunk)
-        insights_review = self.critic.review_insights(chunk_data['insights'], chunk)
-        
-        # === PHASE 3: Self-Correction (if needed) ===
-        needs_correction = False
-        
-        # Check if summary needs revision
-        if summary_review.quality_score.value < QualityScore.ACCEPTABLE.value:
-            logger.warning(f"[Chunk {chunk_id}] Summary quality insufficient, regenerating...")
-            needs_correction = True
-            
-            # Regenerate with feedback
-            feedback_prompt = f"Previous attempt had issues: {', '.join(summary_review.revision_notes)}\n\nOriginal text: {chunk}"
-            revised = await self.summarizer.summarize_async(feedback_prompt)
-            chunk_data['summary'] = revised.content
-            self.metrics.retry_counts['summarizer'] = \
-                self.metrics.retry_counts.get('summarizer', 0) + 1
-        
-        # Check if insights need revision
-        if insights_review.quality_score.value < QualityScore.ACCEPTABLE.value:
-            logger.warning(f"[Chunk {chunk_id}] Insights too shallow, regenerating...")
-            needs_correction = True
-            
-            revised = await self.insight.find_insights_async(chunk)
-            chunk_data['insights'] = revised.content
-            self.metrics.retry_counts['insight'] = \
-                self.metrics.retry_counts.get('insight', 0) + 1
-        
-        # === PHASE 4: Chart & Visual (Non-blocking) ===
+        # Chart and Visuals (Synchronous/Fast)
         chart_data = self.chart.extract_data(chunk)
-        chunk_data['chart_data'] = chart_data
+        visual_kw = self.visual_kw.get_search_term(summary)
         
-        # Generate visual keyword
-        visual_kw = self.visual_kw.get_search_term(chunk_data['summary'])
-        chunk_data['image_prompt'] = visual_kw
-        
-        # Store quality report
-        chunk_data['quality_report'] = {
-            'summary_score': summary_review.quality_score.name,
-            'points_score': points_review.quality_score.name,
-            'insights_score': insights_review.quality_score.name,
-            'corrections_applied': needs_correction
+        # Safe quality score extraction
+        points_score = points_review.quality_score.name if points_review else "UNKNOWN"
+        insights_score = insights_out.quality_score.name if hasattr(insights_out, 'quality_score') else "UNKNOWN"
+
+        return {
+            'points': points_out.content,
+            'insights': insights_out.content,
+            'qna': qna_out.content,
+            'chart_data': chart_data,
+            'image_prompt': visual_kw,
+            'quality_data': {
+                'points_score': points_score,
+                'insights_score': insights_score
+            }
         }
-        
-        logger.info(f"[Chunk {chunk_id}] ✅ Analysis complete (Quality: {summary_review.quality_score.name})")
-        return chunk_data
-    
+
     async def step_1_analyze_async(self, url: str) -> Tuple[List[Dict], RAGEngine]:
         """
-        Async analysis pipeline with parallel chunk processing
+        Intelligent Analysis Pipeline:
+        1. Context Detection (Tone/Category)
+        2. Serial Summarization with Rolling Memory
+        3. Fact Checking Loop
+        4. Parallel Deep Analysis
         """
         start_time = time.time()
         
         logger.info("=" * 60)
-        logger.info("STEP 1: DEEP VIDEO ANALYSIS")
+        logger.info("STEP 1: INTELLIGENT DEEP ANALYSIS")
         logger.info("=" * 60)
         
-        # Download & Transcribe
-        logger.info("📥 Downloading audio...")
+        # 1. Ingest
+        logger.info("📥 Ingesting media...")
         audio_path = download_audio(url)
-        
-        logger.info("🎤 Transcribing with Whisper...")
-        model_size = self.config.get('transcription_model_size', 'base')
-        transcript = transcribe_audio_whisper(audio_path, model_size)
+        # Using larger model size for better accuracy if config allows
+        transcript = transcribe_audio_whisper(audio_path, self.config.get('transcription_model_size', 'base'))
         
         if not transcript:
-            raise ValueError("Transcription failed or returned empty")
+            raise ValueError("Empty transcript produced")
+            
+        # 2. Context Classification
+        logger.info("🧠 Analyzing content DNA (Tone & Category)...")
+        # Sample middle of text to avoid intro/outro noise
+        mid_point = len(transcript) // 2
+        sample_text = transcript[max(0, mid_point-500) : min(len(transcript), mid_point+500)]
+        context_data = self.classifier.classify(sample_text)
+        logger.info(f"   Detected: {context_data.get('category', 'General')} | Tone: {context_data.get('tone', 'Neutral')}")
         
-        logger.info(f"✅ Transcript: {len(transcript)} characters")
-        
-        # Chunk text
+        # 3. Chunking
         chunks = chunk_text(transcript, max_len=2500)
-        logger.info(f"📚 Split into {len(chunks)} chunks")
+        logger.info(f"📚 Processing {len(chunks)} chunks with Rolling Memory...")
         
-        # === PARALLEL CHUNK PROCESSING ===
-        logger.info("🚀 Starting parallel analysis of all chunks...")
+        outline = []
+        previous_summary_context = ""
         
-        # Create tasks for all chunks
-        chunk_tasks = [
-            self.process_chunk_with_review(i, chunk, url)
-            for i, chunk in enumerate(chunks)
-        ]
-        
-        # Process all chunks concurrently
-        outline = await asyncio.gather(*chunk_tasks)
-        
-        # === RAG INDEXING ===
-        logger.info("📇 Building knowledge base for Q&A...")
+        # 4. Processing Loop
+        for i, chunk in enumerate(chunks):
+            # Extract text from chunk dict if using utils.chunk_text
+            chunk_text_content = chunk['text'] if isinstance(chunk, dict) else chunk
+            
+            logger.info(f"[Chunk {i+1}/{len(chunks)}] Processing...")
+            
+            # A. Generate Summary with Memory (Sequential)
+            summary_out = await self.summarizer.summarize_async(
+                chunk_text_content, 
+                prev_context=previous_summary_context 
+            )
+            
+            # B. Fact Check (Hallucination Guard)
+            verification = await self.fact_checker.verify_async(summary_out.content, chunk_text_content)
+            current_summary = summary_out.content
+            
+            # Self-Correction Loop
+            if verification.content.get('correction_needed', False):
+                logger.warning(f"   ⚠ Fact Check Failed: {verification.content.get('hallucinations')}")
+                logger.info("   🔄 Regenerating with strict factual constraints...")
+                
+                correction_prompt = f"""
+                PREVIOUS ERROR: Your last summary contained these hallucinations: {verification.content.get('hallucinations')}.
+                REVISED INSTRUCTION: Summarize strictly based on the text provided below. Do not invent numbers.
+                Original Text: {chunk_text_content}
+                """
+                # Retry
+                summary_out = await self.summarizer.summarize_async(correction_prompt)
+                current_summary = summary_out.content
+                self.metrics.retry_counts['fact_check'] = self.metrics.retry_counts.get('fact_check', 0) + 1
+
+            # C. Update Rolling Context (Keep last 400 chars for next iteration)
+            previous_summary_context = current_summary[-400:]
+            
+            # D. Parallel Deep Analysis
+            analysis_data = await self._process_parallel_tasks(chunk_text_content, current_summary)
+            
+            # Compile Data
+            chunk_data = {
+                'id': i,
+                'original_text': chunk_text_content,
+                'summary': current_summary,
+                'points': analysis_data['points'],
+                'insights': analysis_data['insights'],
+                'qna': analysis_data['qna'],
+                'chart_data': analysis_data['chart_data'],
+                'image_prompt': analysis_data['image_prompt'],
+                'quality_report': analysis_data['quality_data'],
+                'meta': {
+                    'tone_detected': context_data.get('tone'),
+                    'quality_score': summary_out.quality_score.name
+                }
+            }
+            
+            outline.append(chunk_data)
+            
+            # Track Metrics
+            self.metrics.quality_scores[f"summary_{i}"] = summary_out.quality_score
+            self.metrics.agent_times['summarizer'] = \
+                self.metrics.agent_times.get('summarizer', 0) + summary_out.processing_time
+
+        # 5. RAG Indexing
+        logger.info("📇 Building Semantic Knowledge Base...")
         rag = RAGEngine()
+        # chunk_text returns list of dicts, which rag expects
         rag.ingest_transcript(chunks)
         
-        # Calculate metrics
         self.metrics.total_time = time.time() - start_time
-        
-        logger.info("=" * 60)
-        logger.info(f"✅ ANALYSIS COMPLETE in {self.metrics.total_time:.1f}s")
-        logger.info(f"📊 Quality Scores: {self._summarize_quality()}")
-        logger.info(f"🔄 Retries: {sum(self.metrics.retry_counts.values())}")
-        logger.info("=" * 60)
+        logger.info(f"✅ Analysis Complete in {self.metrics.total_time:.1f}s")
+        logger.info(f"📊 Quality Summary: {self._summarize_quality()}")
         
         return outline, rag
-    
+
     def step_1_analyze(self, url: str) -> Tuple[List[Dict], RAGEngine]:
-        """Sync wrapper for async analysis"""
+        """Sync wrapper"""
         return asyncio.run(self.step_1_analyze_async(url))
     
     def _summarize_quality(self) -> str:
-        """Generate quality summary"""
+        """Generate quality summary string"""
         if not self.metrics.quality_scores:
             return "N/A"
         
@@ -260,7 +300,7 @@ class ContentOrchestrator:
         needs_work = sum(1 for s in scores if s.value < QualityScore.ACCEPTABLE.value)
         
         return f"Avg={avg_score:.1f} (⭐{excellent} ✓{good} ○{acceptable} ⚠{needs_work})"
-    
+
     async def step_2_generate_async(
         self, 
         outline: List[Dict], 
@@ -270,16 +310,18 @@ class ContentOrchestrator:
         """
         Enhanced presentation generation with dynamic layouts
         """
+        if not PPTGenerator:
+            raise ImportError("PPTGenerator not found. Cannot generate presentation.")
+
         logger.info("=" * 60)
         logger.info("STEP 2: INTELLIGENT PRESENTATION GENERATION")
         logger.info("=" * 60)
         
         ppt = PPTGenerator()
-        img_gen = ImageGenerator() if use_ai_images else None
+        img_gen = ImageGenerator() if (use_ai_images and ImageGenerator) else None
         
         # === TITLE GENERATION ===
         logger.info("📝 Generating title...")
-        # Use .get() to avoid errors if 'summary' is missing
         full_summary = " ".join(s.get('summary', '') for s in outline[:3])
         title = self.title_gen.generate_title(full_summary)
         logger.info(f"✅ Title: {title}")
@@ -289,18 +331,18 @@ class ContentOrchestrator:
         
         # === PROCESS EACH SECTION ===
         for section in outline:
-            # EXTRACT DATA SAFELY using .get()
             sec_id = section.get('id', 0)
             summary = section.get('summary', '')
             points = section.get('points', [])
             insights = section.get('insights', [])
             image_prompt = section.get('image_prompt', '')
-            chart_data = section.get('chart_data') # <--- FIXED: Returns None if key missing
+            chart_data = section.get('chart_data') 
             qna_data = section.get('qna', [])
 
             logger.info(f"[Section {sec_id+1}] Building slides...")
             
             # Slide 1: Visual Overview
+            img_url = None
             if use_ai_images and img_gen:
                 logger.info("  🎨 Generating AI artwork...")
                 img_url = img_gen.generate(image_prompt, f"sec{sec_id}")
@@ -314,43 +356,22 @@ class ContentOrchestrator:
                 img_url
             )
             
-            # Slide 2: Combined Analysis (if content is moderate)
+            # Slide 2: Analysis
             if len(points) <= 4 and len(insights) <= 3:
-                ppt.add_analysis_slide(
-                    f"Analysis",
-                    points,
-                    insights
-                )
+                ppt.add_analysis_slide(f"Analysis", points, insights)
             else:
-                # Slide 2a: Key Points
-                ppt.add_bullet_slide(
-                    f"Key Findings",
-                    points,
-                    icon="▸"
-                )
-                # Slide 2b: Deep Insights
+                ppt.add_bullet_slide(f"Key Findings", points, icon="▸")
                 if insights:
-                    ppt.add_bullet_slide(
-                        f"Strategic Insights",
-                        insights,
-                        icon="💡"
-                    )
+                    ppt.add_bullet_slide(f"Strategic Insights", insights, icon="💡")
             
-            # Slide 3: Chart (if data available)
-            # This will now safely skip if chart_data is None or key is missing
+            # Slide 3: Chart
             if chart_data:
                 logger.info("  📊 Creating data visualization...")
-                chart_path = ppt.create_chart_image(
-                    chart_data,
-                    f"sec{sec_id}"
-                )
+                chart_path = ppt.create_chart_image(chart_data, f"sec{sec_id}")
                 if chart_path:
-                    ppt.add_chart_slide(
-                        chart_data.get('title', 'Data Analysis'),
-                        chart_path
-                    )
+                    ppt.add_chart_slide(chart_data.get('title', 'Data Analysis'), chart_path)
             
-            # Slide 4: Q&A (if available)
+            # Slide 4: Q&A
             if qna_data:
                 ppt.add_qna_slide(qna_data)
         
@@ -366,13 +387,10 @@ class ContentOrchestrator:
         logger.info("💾 Saving presentation...")
         path = ppt.save(title)
         
-        # Cleanup
         if img_gen:
             img_gen.unload_model()
         
-        logger.info("=" * 60)
         logger.info(f"✅ PRESENTATION GENERATED: {path}")
-        logger.info("=" * 60)
         
         return str(path), title, swot_data
     
@@ -394,11 +412,11 @@ class ContentOrchestrator:
             'agent_times': self.metrics.agent_times,
             'retry_counts': self.metrics.retry_counts,
             'quality_summary': self._summarize_quality(),
+            'quality_scores': self.metrics.quality_scores,
             'cache_stats': {
                 'hits': self.metrics.cache_hits,
                 'misses': self.metrics.cache_misses,
-                'hit_rate': self.metrics.cache_hits / (self.metrics.cache_hits + self.metrics.cache_misses) 
-                    if (self.metrics.cache_hits + self.metrics.cache_misses) > 0 else 0
+                'hit_rate': f"{(self.metrics.cache_hits / (self.metrics.cache_hits + self.metrics.cache_misses) * 100):.1f}%" 
+                    if (self.metrics.cache_hits + self.metrics.cache_misses) > 0 else "0%"
             }
         }
-        
