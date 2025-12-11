@@ -10,7 +10,6 @@ from datetime import datetime
 from pathlib import Path
 
 # Import Enhanced Orchestrator
-# Assuming main.py exists and exports ContentOrchestrator
 try:
     from main import ContentOrchestrator
 except ImportError:
@@ -57,21 +56,7 @@ st.markdown("""
         letter-spacing: 1px;
     }
     
-    /* Status Indicators */
-    .status-badge {
-        padding: 4px 12px;
-        border-radius: 12px;
-        color: white;
-        font-weight: 600;
-        font-size: 0.9em;
-        display: inline-block;
-    }
-    
-    .status-excellent { background: linear-gradient(135deg, #11998e 0%, #38ef7d 100%); }
-    .status-good { background: linear-gradient(135deg, #4facfe 0%, #00f2fe 100%); }
-    .status-warning { background: linear-gradient(135deg, #fa709a 0%, #fee140 100%); }
-    
-    /* Progress Container */
+    /* Progress Box */
     .progress-box {
         background-color: #262730;
         border-radius: 8px;
@@ -103,6 +88,14 @@ if "performance_metrics" not in st.session_state:
     st.session_state.performance_metrics = None
 if "processing_logs" not in st.session_state:
     st.session_state.processing_logs = []
+
+# New State variables for file persistence
+if "generated_ppt_path" not in st.session_state:
+    st.session_state.generated_ppt_path = None
+if "generated_ppt_title" not in st.session_state:
+    st.session_state.generated_ppt_title = None
+if "generated_swot" not in st.session_state:
+    st.session_state.generated_swot = None
 
 # === SIDEBAR ===
 with st.sidebar:
@@ -193,9 +186,9 @@ with st.sidebar:
         col1, col2 = st.columns(2)
         with col1:
             if st.button("♻️ Restart", use_container_width=True):
-                st.session_state.orchestrator = None
-                st.session_state.outline = None
-                st.session_state.rag_engine = None
+                # Reset all state
+                for key in list(st.session_state.keys()):
+                    del st.session_state[key]
                 st.rerun()
         with col2:
             if st.button("🗑️ Clear Cache", use_container_width=True):
@@ -247,6 +240,10 @@ with tab1:
             st.session_state.current_url = url_input
             st.session_state.processing_logs = []
             
+            # Reset previous results
+            st.session_state.generated_ppt_path = None
+            st.session_state.generated_swot = None
+            
             # Progress UI
             progress_placeholder = st.empty()
             status_placeholder = st.empty()
@@ -257,9 +254,6 @@ with tab1:
                     
                     status_placeholder.markdown('<div class="progress-box">📥 <b>Phase 1: Downloading & Transcribing...</b></div>', unsafe_allow_html=True)
                     progress_placeholder.progress(10)
-                    
-                    # NOTE: In a real async setup, we would update progress via callbacks.
-                    # Here we simulate steps based on the synchronous blocks of the orchestrator.
                     
                     # 1. Orchestrator Analysis
                     status_placeholder.markdown('<div class="progress-box">🧠 <b>Phase 2: Agentic Analysis & Knowledge Graph...</b></div>', unsafe_allow_html=True)
@@ -339,12 +333,12 @@ with tab2:
     else:
         st.markdown("### ✏️ Human-in-the-Loop Editor")
         
-        # Quality Overview
         if st.session_state.performance_metrics:
             metrics = st.session_state.performance_metrics
             quality_summary = metrics.get('quality_summary', 'N/A')
             st.caption(f"🤖 AI Confidence Score: {quality_summary}")
         
+        # FORM START
         with st.form("slide_editor_v2"):
             updated_outline = []
             
@@ -410,80 +404,93 @@ with tab2:
                         "insights": [i.strip() for i in new_ins.split("\n") if i.strip()],
                         "image_prompt": new_img,
                         "original_text": slide.get('original_text', ''),
-                        "quality_report": quality_report
+                        "quality_report": quality_report,
+                        "chart_data": slide.get('chart_data'),
+                        "qna": slide.get('qna')
                     })
             
             st.divider()
             
             col_gen1, col_gen2, col_gen3 = st.columns([2, 1, 2])
-            
             with col_gen2:
                 generate_btn = st.form_submit_button(
                     "🎬 Generate Deck",
                     type="primary",
                     use_container_width=True
                 )
+        # FORM END
+        
+        # LOGIC OUTSIDE FORM
+        if generate_btn:
+            with st.spinner("🏗️ Building your presentation..."):
+                try:
+                    path, title, swot = st.session_state.orchestrator.step_2_generate(
+                        updated_outline,
+                        st.session_state.current_url,
+                        use_ai_images=enable_ai_art
+                    )
+                    
+                    # Store results in session state to persist after rerun
+                    st.session_state.generated_ppt_path = path
+                    st.session_state.generated_ppt_title = title
+                    st.session_state.generated_swot = swot
+                    
+                    st.success(f"✅ **Presentation Generated:** {title}")
+                    
+                except Exception as e:
+                    st.error(f"❌ Generation failed: {str(e)}")
+                    st.exception(e)
+
+        # DOWNLOAD SECTION (Visible if generation has happened)
+        if st.session_state.generated_ppt_path and os.path.exists(st.session_state.generated_ppt_path):
+            st.divider()
+            st.markdown("### 📥 Download")
             
-            if generate_btn:
-                with st.spinner("🏗️ Building your presentation..."):
-                    try:
-                        path, title, swot = st.session_state.orchestrator.step_2_generate(
-                            updated_outline,
-                            st.session_state.current_url,
-                            use_ai_images=enable_ai_art
-                        )
-                        
-                        st.success(f"✅ **Presentation Generated:** {title}")
-                        
-                        # Download button
-                        if os.path.exists(path):
-                            with open(path, "rb") as f:
-                                st.download_button(
-                                    label="📥 Download PowerPoint",
-                                    data=f,
-                                    file_name=f"{title}.pptx",
-                                    mime="application/vnd.openxmlformats-officedocument.presentationml.presentation",
-                                    use_container_width=True
-                                )
-                        
-                        # SWOT Display
-                        st.subheader("📊 Executive SWOT Analysis")
-                        if swot:
-                            col_s1, col_s2 = st.columns(2)
-                            
-                            with col_s1:
-                                st.markdown(f"""
-                                <div style="background: linear-gradient(135deg, #11998e 0%, #38ef7d 100%); 
-                                            padding: 15px; border-radius: 10px; color: white; margin-bottom: 15px;">
-                                    <b>✅ STRENGTHS</b><br><small>{swot.get('S', 'N/A')}</small>
-                                </div>
-                                """, unsafe_allow_html=True)
-                                
-                                st.markdown(f"""
-                                <div style="background: linear-gradient(135deg, #fa709a 0%, #fee140 100%); 
-                                            padding: 15px; border-radius: 10px; color: white;">
-                                    <b>⚠️ WEAKNESSES</b><br><small>{swot.get('W', 'N/A')}</small>
-                                </div>
-                                """, unsafe_allow_html=True)
-                            
-                            with col_s2:
-                                st.markdown(f"""
-                                <div style="background: linear-gradient(135deg, #4facfe 0%, #00f2fe 100%); 
-                                            padding: 15px; border-radius: 10px; color: white; margin-bottom: 15px;">
-                                    <b>🚀 OPPORTUNITIES</b><br><small>{swot.get('O', 'N/A')}</small>
-                                </div>
-                                """, unsafe_allow_html=True)
-                                
-                                st.markdown(f"""
-                                <div style="background: linear-gradient(135deg, #f093fb 0%, #f5576c 100%); 
-                                            padding: 15px; border-radius: 10px; color: white;">
-                                    <b>⚡ THREATS</b><br><small>{swot.get('T', 'N/A')}</small>
-                                </div>
-                                """, unsafe_allow_html=True)
-                        
-                    except Exception as e:
-                        st.error(f"❌ Generation failed: {str(e)}")
-                        st.exception(e)
+            with open(st.session_state.generated_ppt_path, "rb") as f:
+                st.download_button(
+                    label=f"Download {st.session_state.generated_ppt_title}.pptx",
+                    data=f,
+                    file_name=f"{st.session_state.generated_ppt_title}.pptx",
+                    mime="application/vnd.openxmlformats-officedocument.presentationml.presentation",
+                    use_container_width=True,
+                    key="download_ppt_btn"
+                )
+            
+            # SWOT Display
+            if st.session_state.generated_swot:
+                st.subheader("📊 Executive SWOT Analysis")
+                swot = st.session_state.generated_swot
+                col_s1, col_s2 = st.columns(2)
+                
+                with col_s1:
+                    st.markdown(f"""
+                    <div style="background: linear-gradient(135deg, #11998e 0%, #38ef7d 100%); 
+                                padding: 15px; border-radius: 10px; color: white; margin-bottom: 15px;">
+                        <b>✅ STRENGTHS</b><br><small>{swot.get('S', 'N/A')}</small>
+                    </div>
+                    """, unsafe_allow_html=True)
+                    
+                    st.markdown(f"""
+                    <div style="background: linear-gradient(135deg, #fa709a 0%, #fee140 100%); 
+                                padding: 15px; border-radius: 10px; color: white;">
+                        <b>⚠️ WEAKNESSES</b><br><small>{swot.get('W', 'N/A')}</small>
+                    </div>
+                    """, unsafe_allow_html=True)
+                
+                with col_s2:
+                    st.markdown(f"""
+                    <div style="background: linear-gradient(135deg, #4facfe 0%, #00f2fe 100%); 
+                                padding: 15px; border-radius: 10px; color: white; margin-bottom: 15px;">
+                        <b>🚀 OPPORTUNITIES</b><br><small>{swot.get('O', 'N/A')}</small>
+                    </div>
+                    """, unsafe_allow_html=True)
+                    
+                    st.markdown(f"""
+                    <div style="background: linear-gradient(135deg, #f093fb 0%, #f5576c 100%); 
+                                padding: 15px; border-radius: 10px; color: white;">
+                        <b>⚡ THREATS</b><br><small>{swot.get('T', 'N/A')}</small>
+                    </div>
+                    """, unsafe_allow_html=True)
 
 # === TAB 3: Q&A CHAT ===
 with tab3:
@@ -513,13 +520,11 @@ with tab3:
                 message_placeholder = st.empty()
                 with st.spinner("Searching knowledge base..."):
                     try:
-                        # RAG retrieval - Handle the list of dicts properly
+                        # RAG retrieval
                         rag_results = st.session_state.rag_engine.search(prompt, n_results=3)
-                        
-                        # Extract text from the 'document' key in the result dictionaries
                         context_text = "\n\n".join([res['document'] for res in rag_results])
                         
-                        # Generate answer using Orchestrator's LLM (via summarizer agent for text gen)
+                        # Generate answer
                         full_prompt = f"""Use the following context from a video transcript to answer the question.
                         
 CONTEXT:
@@ -529,7 +534,6 @@ QUESTION: {prompt}
 
 ANSWER (be concise and factual):"""
                         
-                        # Use the orchestrator's summarizer agent to generate the response
                         if st.session_state.orchestrator and st.session_state.orchestrator.summarizer:
                             answer = st.session_state.orchestrator.summarizer.generate(
                                 full_prompt,
@@ -561,50 +565,35 @@ with tab4:
     else:
         metrics = st.session_state.performance_metrics
         
-        # Overview Metrics
         col1, col2, col3, col4 = st.columns(4)
         
         with col1:
-            st.metric(
-                "Total Processing Time",
-                f"{metrics.get('total_time', 0):.1f}s"
-            )
+            st.metric("Total Processing Time", f"{metrics.get('total_time', 0):.1f}s")
         
         with col2:
             retries = sum(metrics.get('retry_counts', {}).values())
-            st.metric(
-                "Self-Corrections",
-                retries,
-                help="Number of times agents re-generated content for quality"
-            )
+            st.metric("Self-Corrections", retries)
         
         with col3:
             cache_stats = metrics.get('cache_stats', {})
             hit_rate = 0
-            # Parse hit rate string "xx%" to float if needed, or use raw if float
             raw_hit = cache_stats.get('hit_rate', 0)
             if isinstance(raw_hit, str) and '%' in raw_hit:
-                try:
-                    hit_rate = float(raw_hit.strip('%'))
+                try: hit_rate = float(raw_hit.strip('%'))
                 except: pass
             else:
                 hit_rate = raw_hit * 100 if raw_hit <= 1 else raw_hit
-                
             st.metric("Cache Hit Rate", f"{hit_rate:.1f}%")
         
         with col4:
-            # Safely parse quality score
             q_sum = metrics.get('quality_summary', 'N/A')
-            display_q = q_sum
-            if '=' in str(q_sum):
-                display_q = str(q_sum).split('=')[1].split()[0]
+            display_q = str(q_sum).split('=')[1].split()[0] if '=' in str(q_sum) else q_sum
             st.metric("Quality Score", display_q)
         
         st.divider()
         
         # Agent Performance Breakdown
         st.subheader("🤖 Agent Latency")
-        
         agent_times = metrics.get('agent_times', {})
         if agent_times:
             fig = go.Figure(data=[
@@ -616,25 +605,15 @@ with tab4:
                     textposition='auto'
                 )
             ])
-            
-            fig.update_layout(
-                title="Processing Time per Agent",
-                xaxis_title="Agent",
-                yaxis_title="Seconds",
-                template="plotly_dark",
-                height=350,
-                margin=dict(l=20, r=20, t=40, b=20)
-            )
+            fig.update_layout(title="Processing Time per Agent", template="plotly_dark", height=350)
             st.plotly_chart(fig, use_container_width=True)
         
         # Quality Scores Distribution
         st.subheader("⭐ Output Quality Distribution")
         quality_scores = metrics.get('quality_scores', {})
-        
         if quality_scores:
             score_counts = {}
             for score in quality_scores.values():
-                # Handle Enum or String representation
                 score_name = score.name if hasattr(score, 'name') else str(score)
                 score_counts[score_name] = score_counts.get(score_name, 0) + 1
             
@@ -647,14 +626,7 @@ with tab4:
                     textposition='auto'
                 )
             ])
-            
-            fig3.update_layout(
-                title="Quality Ratings Breakdown",
-                xaxis_title="Quality Level",
-                yaxis_title="Count",
-                template="plotly_dark",
-                height=350
-            )
+            fig3.update_layout(title="Quality Ratings Breakdown", template="plotly_dark", height=350)
             st.plotly_chart(fig3, use_container_width=True)
 
 # === FOOTER ===
