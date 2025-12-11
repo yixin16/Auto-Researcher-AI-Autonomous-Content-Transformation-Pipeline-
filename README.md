@@ -5,53 +5,50 @@
 
 ![Python](https://img.shields.io/badge/python-3.9+-blue.svg)
 ![CUDA](https://img.shields.io/badge/CUDA-11.8+-green.svg)
+![CUDA](https://img.shields.io/badge/CUDA-11.8+-green.svg)
+![MPS](https://img.shields.io/badge/Apple_Silicon-Supported-orange.svg)
 
-**Transform YouTube videos into professional presentations with AI agents that review and improve each other's work**
+**Transform YouTube videos into professional presentations with AI agents that review, correct, and improve each other's work.**
 
 </div>
 
 ---
 
-**AutoResearcher AI Pro** implements a **self-correcting multi-agent system** where:
+**Auto-Researcher AI** implements a **self-correcting multi-agent system** designed to handle the unpredictability of local LLMs. It features:
 
--  **Critic Agent** reviews outputs from all other agents
--  **Automatic Retry Logic** regenerates low-quality content with improvement feedback
--  **Parallel Processing** analyzes multiple sections simultaneously (3-5x faster)
--  **Quality Metrics** track every output's score and retry count
--  **Dynamic Slide Design** adapts layouts based on content density
+- 🛡️ **Robust JSON Engine**: A new parsing layer that handles "chatty" models (like Phi-2) that break standard JSON formatting.
+- 🔄 **Automatic Retry Logic**: Regenerates low-quality content with specific improvement feedback from a Critic Agent.
+- 🍎 **Cross-Platform**: Native support for NVIDIA GPUs (CUDA) and Apple Silicon (MPS).
+- 📊 **Dynamic RAG**: Semantic search that understands context windows across video segments for accurate Q&A.
 
-**Result**: Higher quality presentations with less human editing needed.
 
 ---
+
 
 ## 🚀 Key Features
 
 ### **Intelligence Layer**
--  **Self-Correction System**: Agents evaluate their own outputs and retry if quality is poor
--  **Critic Agent**: Meta-agent that reviews summaries, key points, and insights
--  **Quality Scoring**: Every output rated (Excellent → Good → Acceptable → Needs Revision → Poor)
--  **Feedback Loops**: Agents receive specific improvement notes from Critic
+- **Self-Correction System**: Agents evaluate their own outputs. If a model hallucinates JSON keys (e.g., outputting is_accurable instead of is_accurate), the system auto-corrects.
+- **Critic Agent**: Meta-agent that reviews summaries and insights for hallucination, flow and logical consistency.
+- **Fact-Checking Loop**: A dedicated agent compares generated summaries against raw transcripts to flag numerical inconsistencies.
 
 ### **Performance**
--  **Async Processing**: All chunks analyzed in parallel using `asyncio.gather()`
--  **Smart Caching**: MD5-based cache with type validation
--  **Efficient Memory**: Models unload when not needed to free VRAM
--  **Metrics Dashboard**: Real-time performance tracking and visualization
+- **Async Processing**: Analyzes multiple transcript chunks in parallel using asyncio.
+- **Smart Caching**: MD5-based cache prevents re-processing known video segments.
+- **Resource Management**: Automatically unloads transcription models to free VRAM for reasoning models on consumer hardware.
 
 ### **Output Quality**
--  **Professional Design**: Modern corporate themes with gradients
--  **Dynamic Layouts**: Automatically adjusts slide count based on content
--  **Deep Analysis**: Distinguishes between facts and strategic insights
--  **Data Visualization**: Automatic chart generation from numerical data
--  **SWOT Analysis**: Strategic executive summary
+- **Professional Design**: Generates PowerPoint (.pptx) files with modern gradients, title slides, and smart layouts.
+- **Data Visualization**: automatically extracts numerical data from text and renders native charts.
+- **SWOT Analysis**: Performs a strategic analysis on the full context of the video.
 
 ### **User Experience**
--  **RAG-Powered Q&A**: Ask questions about video content
--  **Human-in-the-Loop**: Review and edit before final generation
--  **Real-time Progress**: Live updates during analysis
--  **Performance Metrics**: See which agents take longest, retry counts, quality distribution
+- **Streamlit Dashboard v2.1**:  Real-time metrics, log streaming, and a "Human-in-the-Loop" editor.
+- **RAG-Powered Q&A**: Chat with your video content using a vector database (ChromaDB).
+- **Deep Metrics**: Track agent latency, self-correction counts, and quality scores per section.
 
 ---
+
 
 ##  Installation
 
@@ -166,27 +163,22 @@ Open browser to: `http://localhost:8501`
 ```
 ┌─────────────────────────────────────────────────────────────┐
 │                   ContentOrchestrator                       │
-│  (Main Controller with Async Processing)                    │
+│  (Manages Context Window, Imports & Error Handling)         │
 └─────────────────────────────────────────────────────────────┘
                             │
         ┌───────────────────┼───────────────────┐
         │                   │                   │
         ▼                   ▼                   ▼
 ┌──────────────┐    ┌──────────────┐    ┌──────────────┐
-│ CriticAgent  │    │ Processing   │    │   Utility    │
-│ (Quality     │    │   Agents     │    │   Agents     │
-│  Control)    │    │              │    │              │
+│  Robust JSON │    │  RAG Engine  │    │   Utility    │
+│    Parser    │    │ (ChromaDB)   │    │   Agents     │
 └──────────────┘    └──────────────┘    └──────────────┘
-        │                   │                   │
-        │                   │                   │
-        ├───────────────────┼───────────────────┤
         │                   │                   │
         ▼                   ▼                   ▼
 ┌─────────────┐     ┌─────────────┐     ┌─────────────┐
-│ Review      │     │ Summarizer  │     │ Title       │
-│ Summaries   │     │ Key Points  │     │ Visual KW   │
-│ Points      │     │ Insights    │     │ Chart       │
-│ Insights    │     │ Q&A         │     │ SWOT        │
+│ Fact Checker│     │  Context    │     │ Title       │
+│ (Strict)    │     │  Classifier │     │ Visual KW   │
+│             │     │             │     │ Chart       │
 └─────────────┘     └─────────────┘     └─────────────┘
 ```
 
@@ -274,17 +266,15 @@ Open browser to: `http://localhost:8501`
 
 ---
 
-##  Quality Control System
+##  Quality Scoring System
 
-### Quality Metrics
 
-| Score | Value | Criteria | Action |
-|-------|-------|----------|--------|
-| **EXCELLENT** | 5 | Perfect output, no issues | ✅ Accept |
-| **GOOD** | 4 | Minor issues, usable | ✅ Accept |
-| **ACCEPTABLE** | 3 | Meets minimum standards | ✅ Accept |
-| **NEEDS_REVISION** | 2 | Significant problems | 🔄 Retry |
-| **POOR** | 1 | Unusable output | 🔄 Retry |
+The Critic Agent assigns a score (1-5) to every generation:
+Score	Meaning	System Action
+5 (Excellent)	Perfect JSON & content	✅ Proceed
+3 (Acceptable)	Minor formatting issues	✅ Auto-repair
+1 (Poor)	Hallucination detected	🔄 Retry (Max 2x)
+
 
 ### Critic Agent Reviews
 
